@@ -1,6 +1,6 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
-title Corradi Backupper
+title Corradi Backupper (XCOPY)
 color fa
 
 :::                               _ _
@@ -24,7 +24,7 @@ for /f "delims=: tokens=*" %%A in ('findstr /b ::: ^< "%~f0"') do @echo(%%A
 
 :menu
 echo.
-echo [A] Attiva Corradi Backupper
+echo [A] Attiva Corradi Backupper (XCOPY)
 echo [B] Esci dal programma
 echo.
 choice /c AB /M "Scelta:"
@@ -36,128 +36,160 @@ if errorlevel 1 goto start
 cls
 echo.
 echo ========================================
-echo    CORRADI BACKUPPER
+echo    CORRADI BACKUPPER - CONFIGURAZIONE
 echo ========================================
 echo.
 
-REM --- CONFIG: imposta qui i percorsi ---
-set "SOURCE=C:\TuaCartellaOrigine"
-set "DESTINATION=D:\TuaCartellaDestinazione"
-REM --------------------------------------
+REM Chiedi cartella sorgente
+set "SOURCE="
+echo Inserisci il percorso completo della cartella da copiare
+echo (Esempio: C:\Users\Corradi\Documenti\MioProgetto)
+echo.
+set /p "SOURCE=Cartella origine: "
 
-set "LOG=%~dp0backup_xcopy.log"
-set "EXCLUDE=%~dp0exclude_xcopy.txt"
+REM Rimuovi eventuali virgolette
+set "SOURCE=%SOURCE:"=%"
 
-echo Origine      : "%SOURCE%"
-echo Destinazione : "%DESTINATION%"
-echo Log          : "%LOG%"
-if exist "%EXCLUDE%" (
-  echo Exclude     : "%EXCLUDE%"
-) else (
-  echo Exclude     : (nessuno) - file non trovato: "%EXCLUDE%"
+REM Controlla se esiste
+if not exist "%SOURCE%" (
+    echo.
+    echo ERRORE: La cartella "%SOURCE%" non esiste!
+    echo.
+    pause
+    goto start
 )
 
+REM Chiedi disco/cartella destinazione
+set "DESTINATION="
 echo.
+echo Inserisci il percorso di destinazione (disco o cartella)
+echo (Esempio: D:\ oppure E:\Backup\MioProgetto)
+echo.
+set /p "DESTINATION=Destinazione: "
+
+REM Rimuovi eventuali virgolette
+set "DESTINATION=%DESTINATION:"=%"
+
+REM Crea la cartella destinazione se non esiste
+if not exist "%DESTINATION%" (
+    echo.
+    echo La cartella destinazione non esiste. Vuoi crearla?
+    choice /c SN /M "Creare %DESTINATION%?"
+    if errorlevel 2 goto start
+    mkdir "%DESTINATION%" 2>nul
+    if errorlevel 1 (
+        echo ERRORE: Impossibile creare la cartella di destinazione!
+        pause
+        goto start
+    )
+)
+
+REM Mostra riepilogo
+cls
+echo.
+echo ========================================
+echo    RIEPILOGO BACKUP
+echo ========================================
+echo.
+echo Origine      : "%SOURCE%"
+echo Destinazione : "%DESTINATION%"
+echo.
+
+REM Menu tipo backup
 echo [1] Backup completo (copia tutto)
 echo [2] Backup incrementale (solo file piu' recenti)
-echo [3] Simulazione (lista cosa copierebbe, non copia)
-echo [4] Torna al menu
+echo [3] Simulazione (mostra cosa copierebbe)
+echo [4] Annulla e torna al menu
 echo.
-choice /c 1234 /M "Seleziona:"
+choice /c 1234 /M "Seleziona il tipo di backup:"
 
 if errorlevel 4 goto menu
 if errorlevel 3 goto dryrun
 if errorlevel 2 goto incremental
 if errorlevel 1 goto full
 
-:precheck
-if not exist "%SOURCE%" (
-  echo ERRORE: cartella origine non esiste.
-  pause
-  goto menu
-)
-if not exist "%DESTINATION%" (
-  mkdir "%DESTINATION%" >nul 2>&1
-)
-
-REM Intestazione log
->>"%LOG%" echo.
->>"%LOG%" echo ==================================================
->>"%LOG%" echo Avvio: %date% %time%
->>"%LOG%" echo SOURCE=%SOURCE%
->>"%LOG%" echo DEST=%DESTINATION%
->>"%LOG%" echo ==================================================
-goto :eof
-
 :full
-call :precheck
 echo.
-echo Avvio backup completo...
+echo ========================================
+echo    BACKUP COMPLETO IN CORSO...
+echo ========================================
 echo.
 
-set "COMMON_OPTS=/S /E /H /C /I /Y /R /K /V /F"
-if exist "%EXCLUDE%" (
-  xcopy "%SOURCE%\*" "%DESTINATION%\" %COMMON_OPTS% /exclude:"%EXCLUDE%" >>"%LOG%" 2>&1
-) else (
-  xcopy "%SOURCE%\*" "%DESTINATION%\" %COMMON_OPTS% >>"%LOG%" 2>&1
-)
+REM Parametri XCOPY:
+REM /S = copia sottocartelle non vuote
+REM /E = copia anche sottocartelle vuote
+REM /H = copia file nascosti e di sistema
+REM /C = continua anche in caso di errori
+REM /I = assume che destinazione sia una cartella
+REM /Y = sovrascrive senza chiedere
+REM /R = sovrascrive anche file read-only
+REM /K = mantiene attributi read-only
+REM /V = verifica i file copiati
+
+xcopy "%SOURCE%\*" "%DESTINATION%\" /S /E /H /C /I /Y /R /K /V /F
 
 call :handle_errorlevel
 pause
 goto menu
 
 :incremental
-call :precheck
 echo.
-echo Avvio backup incrementale (XCOPY /D)...
+echo ========================================
+echo    BACKUP INCREMENTALE IN CORSO...
+echo ========================================
 echo.
 
-set "COMMON_OPTS=/S /E /H /C /I /Y /R /K /V /F /D"
-if exist "%EXCLUDE%" (
-  xcopy "%SOURCE%\*" "%DESTINATION%\" %COMMON_OPTS% /exclude:"%EXCLUDE%" >>"%LOG%" 2>&1
-) else (
-  xcopy "%SOURCE%\*" "%DESTINATION%\" %COMMON_OPTS% >>"%LOG%" 2>&1
-)
+REM /D = copia solo file piu' recenti della destinazione
+xcopy "%SOURCE%\*" "%DESTINATION%\" /S /E /H /C /I /Y /R /K /V /F /D
 
 call :handle_errorlevel
 pause
 goto menu
 
 :dryrun
-call :precheck
 echo.
-echo Simulazione: genero lista file (XCOPY /L)...
+echo ========================================
+echo    SIMULAZIONE (nessun file copiato)
+echo ========================================
 echo.
 
-set "COMMON_OPTS=/S /E /H /C /I /Y /R /K /V /F /L"
-if exist "%EXCLUDE%" (
-  xcopy "%SOURCE%\*" "%DESTINATION%\" %COMMON_OPTS% /exclude:"%EXCLUDE%" >>"%LOG%" 2>&1
-) else (
-  xcopy "%SOURCE%\*" "%DESTINATION%\" %COMMON_OPTS% >>"%LOG%" 2>&1
-)
+REM /L = mostra solo cosa verrebbe copiato senza copiare
+xcopy "%SOURCE%\*" "%DESTINATION%\" /S /E /H /C /I /Y /R /K /V /F /L
 
 call :handle_errorlevel
-echo (Vedi log: "%LOG%")
 pause
 goto menu
 
 :handle_errorlevel
-REM Exit code XCOPY: 0 ok, 1 nessun file, 2 CTRL+C, 4 init error, 5 write error
-set "RC=%errorlevel%"
 echo.
-echo XCOPY exit code: %RC%
->>"%LOG%" echo.
->>"%LOG%" echo Fine: %date% %time% - ExitCode=%RC%
+echo ========================================
+set "RC=%errorlevel%"
 
-if "%RC%"=="0" echo OK: file copiati senza errori.
-if "%RC%"=="1" echo Nota: nessun file trovato da copiare.
-if "%RC%"=="2" echo ERRORE: operazione interrotta (CTRL+C).
-if "%RC%"=="4" echo ERRORE: problema di inizializzazione (memoria/spazio/sintassi).
-if "%RC%"=="5" echo ERRORE: problema di scrittura su disco.
+if "%RC%"=="0" (
+    echo RISULTATO: File copiati con successo!
+    echo Exit code: %RC%
+)
+if "%RC%"=="1" (
+    echo RISULTATO: Nessun file trovato da copiare.
+    echo Exit code: %RC%
+)
+if "%RC%"=="2" (
+    echo ERRORE: Operazione interrotta dall'utente (CTRL+C).
+    echo Exit code: %RC%
+)
+if "%RC%"=="4" (
+    echo ERRORE: Problema di inizializzazione (memoria/sintassi).
+    echo Exit code: %RC%
+)
+if "%RC%"=="5" (
+    echo ERRORE: Errore di scrittura su disco.
+    echo Exit code: %RC%
+)
+echo ========================================
 goto :eof
 
 :exit
 echo.
-echo Uscita...
+echo Uscita dal programma...
 timeout /t 2 >nul
 exit /b
